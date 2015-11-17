@@ -74,7 +74,11 @@ class Mongodb_retention_scheduler(BaseModule):
         self.uri = uri
         self.database = database
         self.replica_set = replica_set
-        self.max_workers = 4
+        try:
+            cpus=cpu_count()
+        except NotImplementedError:
+            cpus=2
+        self.max_workers = int(getattr(modconf,'max_workers',cpus))
         # Older versions don't handle replicasets and don't have the fsync option
         if version < 2:
             logger.error('[MongodbRetention] Your pymongo lib is too old. '
@@ -166,27 +170,25 @@ class Mongodb_retention_scheduler(BaseModule):
         main function that is called in the retention creation pass
         """
 
-        try:
-            self.max_workers = cpu_count()
-        except NotImplementedError:
-            pass
-        
         t0 = time.time()
         logger.debug("[MongodbRetention] asking me to update the retention objects")
 
         all_data = daemon.get_retention_data()
 
         t3 = time.time()
-        processes = []
-        for i in xrange(self.max_workers):
-            proc = Process(target=self.job, args=(all_data, i, self.max_workers))
-            proc.start()
-            processes.append(proc)
-
-        # Allow 30s to join the sub-processes, should be enough
-        for proc in processes:
-            proc.join(30)
-
+        if self.max_workers>0:
+            processes = []
+            for i in xrange(self.max_workers):
+                proc = Process(target=self.job, args=(all_data, i, self.max_workers))
+                proc.start()
+                processes.append(proc)
+    
+            # Allow 30s to join the sub-processes, should be enough
+            for proc in processes:
+                proc.join(30)
+        else:
+            self.job(all_data,1,1)
+    
         logger.info("Retention information updated in Mongodb (%.2fs)" % (time.time() - t0))
 
     
