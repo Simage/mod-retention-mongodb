@@ -184,8 +184,10 @@ class Mongodb_retention_scheduler(BaseModule):
                 processes.append(proc)
     
             # Allow 30s to join the sub-processes, should be enough
+            processes[0].join(30)
             for proc in processes:
-                proc.join(30)
+                proc.terminate()
+                proc.join(1)
         else:
             self.job(all_data,1,1)
     
